@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TMG Session Planner</title>
+<style>
+  :root{
+    --bg:#0f1729; --panel:#182338; --panel2:#1e2b45; --line:#2b3a58;
+    --text:#e8eef8; --muted:#93a3c0; --accent:#4f9cf9; --accent2:#3b82f6;
+    --green:#22c55e; --green-bg:#123023; --amber:#f59e0b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg);color:var(--text);padding:16px;max-width:820px;margin:0 auto}
+  h1{font-size:22px;margin:4px 0 2px;display:flex;align-items:center;gap:8px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+
+  .add-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:14px;margin-bottom:20px}
+  .add-card h2{font-size:14px;margin:0 0 12px;color:var(--muted);font-weight:600;
+    text-transform:uppercase;letter-spacing:.5px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .field{flex:1;min-width:140px;display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+  .field label{font-size:12px;color:var(--muted)}
+  input,select{background:var(--panel2);border:1px solid var(--line);color:var(--text);
+    border-radius:9px;padding:11px 12px;font-size:15px;font-family:inherit;width:100%}
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  .add-btn{background:var(--accent2);color:#fff;border:none;border-radius:9px;
+    padding:12px 20px;font-size:15px;font-weight:600;cursor:pointer;width:100%;margin-top:4px}
+  .add-btn:active{background:var(--accent)}
+  .add-btn:disabled{opacity:.5}
+
+  .tabs{display:flex;gap:6px;margin-bottom:14px}
+  .tab{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--muted);
+    padding:10px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;text-align:center}
+  .tab.active{background:var(--accent2);color:#fff;border-color:var(--accent2)}
+  .tab .count{opacity:.7;font-weight:400}
+
+  .day-head{font-size:12px;color:var(--accent);font-weight:700;text-transform:uppercase;
+    letter-spacing:.6px;margin:16px 4px 8px}
+
+  .item{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:12px 14px;margin-bottom:9px;display:flex;align-items:center;gap:12px}
+  .check{width:26px;height:26px;border-radius:50%;border:2px solid var(--muted);
+    flex-shrink:0;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    font-size:15px;color:#fff;transition:all .15s}
+  .check:active{transform:scale(.9)}
+  .info{flex:1;min-width:0}
+  .name{font-size:16px;font-weight:600}
+  .meta{font-size:13px;color:var(--muted);margin-top:2px}
+  .del{background:none;border:none;color:var(--muted);font-size:19px;cursor:pointer;
+    padding:4px 8px;flex-shrink:0}
+  .del:active{color:#ff6b6b}
+
+  .item.done{background:var(--green-bg);border-color:#1e5637}
+  .item.done .check{background:var(--green);border-color:var(--green)}
+  .item.done .name{text-decoration:line-through;color:var(--muted)}
+  .item.done .meta{color:#5f8a6f}
+
+  .empty{text-align:center;color:var(--muted);padding:40px 20px;font-size:14px}
+
+  .sync{font-size:12px;color:var(--muted);margin:-8px 4px 14px;display:flex;
+    align-items:center;gap:6px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0}
+  .dot.ok{background:var(--green)}
+  .dot.err{background:#ff6b6b}
+  .dot.sync{background:var(--amber)}
+</style>
+</head>
+<body>
+  <h1>📅 Session Planner</h1>
+  <div class="sub">Add sessions, then tap the circle to mark complete.</div>
+  <div class="sync"><span class="dot" id="syncDot"></span><span id="syncText">Connecting…</span></div>
+
+  <div class="add-card">
+    <h2>+ New Session</h2>
+    <div class="row">
+      <div class="field">
+        <label>Student</label>
+        <input id="fName" placeholder="e.g. Hesham" />
+      </div>
+      <div class="field">
+        <label>Date</label>
+        <input id="fDate" type="date" />
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Time</label>
+        <input id="fTime" type="time" />
+      </div>
+      <div class="field">
+        <label>Topic / Note (optional)</label>
+        <input id="fTopic" placeholder="e.g. Pulmonology qbank" />
+      </div>
+    </div>
+    <button class="add-btn" id="addBtn" onclick="addSession()">Add Session</button>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="upcoming" onclick="setTab('upcoming')">
+      Upcoming <span class="count" id="cUp"></span>
+    </div>
+    <div class="tab" data-tab="done" onclick="setTab('done')">
+      Completed <span class="count" id="cDone"></span>
+    </div>
+  </div>
+
+  <div id="list"></div>
+
+<!-- Firebase SDK (compat build, works with plain <script>, no bundler needed) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<script>
+  // ---- Firebase config (yours) ----
+  var firebaseConfig = {
+    apiKey: "AIzaSyAEYpFrA01-jjzulZODcaygFVTaEJ4RTwI",
+    authDomain: "student-planner-75800.firebaseapp.com",
+    projectId: "student-planner-75800",
+    storageBucket: "student-planner-75800.firebasestorage.app",
+    messagingSenderId: "783046279845",
+    appId: "1:783046279845:web:89aaa9ece501ffa8ef434c",
+    measurementId: "G-GLB57BGZBP"
+  };
+
+  var tab = 'upcoming';
+  var sessions = [];          // local mirror of Firestore docs
+  var ready = false;
+  var db = null;
+
+  function setStatus(state, text){
+    var dot = document.getElementById('syncDot');
+    if(dot){ dot.className = 'dot' + (state ? ' '+state : ''); }
+    var t = document.getElementById('syncText');
+    if(t){ t.textContent = text; }
+  }
+
+  // If the Firebase SDK didn't load (e.g. opened directly from Files as a
+  // file:// preview, or no internet), show a clear message instead of crashing.
+  if (typeof firebase === 'undefined' || !firebase.initializeApp) {
+    setStatus('err', 'Open this from your GitHub web link (not the Files app).');
+    document.getElementById('addBtn').disabled = true;
+    if (typeof render === 'function') render();
+    throw new Error('Firebase SDK not available — page must run from a web (https) address.');
+  }
+
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+  var COLLECTION = 'sessions';   // one collection holds all this planner's sessions
+
+  // ---- Live sync: Firestore -> screen ----
+  // Any change (this device or another) refreshes the list automatically.
+  db.collection(COLLECTION).onSnapshot(function(snap){
+    sessions = [];
+    snap.forEach(function(doc){
+      var d = doc.data();
+      d.id = doc.id;            // Firestore document id (string)
+      sessions.push(d);
+    });
+    ready = true;
+    document.getElementById('addBtn').disabled = false;
+    setStatus('ok', 'Synced to cloud');
+    render();
+  }, function(err){
+    console.error(err);
+    setStatus('err', 'Sync error — check database rules');
+  });
+
+  function setTab(t){
+    tab = t;
+    document.querySelectorAll('.tab').forEach(function(el){
+      el.classList.toggle('active', el.dataset.tab===t);
+    });
+    render();
+  }
+
+  function addSession(){
+    var name = document.getElementById('fName').value.trim();
+    var date = document.getElementById('fDate').value;
+    if(!name || !date){ alert('Please add a student name and a date.'); return; }
+    setStatus('sync', 'Saving…');
+    db.collection(COLLECTION).add({
+      name: name,
+      date: date,
+      time: document.getElementById('fTime').value,
+      topic: document.getElementById('fTopic').value.trim(),
+      done: false,
+      createdAt: Date.now()
+    }).then(function(){
+      document.getElementById('fName').value='';
+      document.getElementById('fDate').value='';
+      document.getElementById('fTime').value='';
+      document.getElementById('fTopic').value='';
+      tab='upcoming'; setTab('upcoming');
+    }).catch(function(e){
+      console.error(e); setStatus('err','Could not save'); alert('Could not save. Check your connection.');
+    });
+  }
+
+  function toggle(id){
+    var s = sessions.find(function(x){return x.id===id});
+    if(!s) return;
+    setStatus('sync','Saving…');
+    db.collection(COLLECTION).doc(id).update({ done: !s.done })
+      .catch(function(e){ console.error(e); setStatus('err','Could not update'); });
+  }
+
+  function del(id){
+    if(!confirm('Delete this session?')) return;
+    setStatus('sync','Deleting…');
+    db.collection(COLLECTION).doc(id).delete()
+      .catch(function(e){ console.error(e); setStatus('err','Could not delete'); });
+  }
+
+  function fmtDate(d){
+    var dt = new Date(d+'T00:00:00');
+    return dt.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+  }
+  function fmtTime(t){
+    if(!t) return '';
+    var p=t.split(':'), h=+p[0], m=p[1], ap=h>=12?'PM':'AM';
+    h=h%12||12; return h+':'+m+' '+ap;
+  }
+
+  function render(){
+    var up = sessions.filter(function(s){return !s.done});
+    var done = sessions.filter(function(s){return s.done});
+    document.getElementById('cUp').textContent = up.length;
+    document.getElementById('cDone').textContent = done.length;
+
+    var show = tab==='upcoming' ? up : done;
+    var list = document.getElementById('list');
+
+    if(show.length===0){
+      list.innerHTML = '<div class="empty">'
+        + (ready ? 'No '+(tab==='upcoming'?'upcoming':'completed')+' sessions yet.' : 'Loading…')
+        + '</div>';
+      return;
+    }
+
+    show.sort(function(a,b){
+      return (a.date+ (a.time||'')).localeCompare(b.date+(b.time||''));
+    });
+
+    var html='', lastDay='';
+    show.forEach(function(s){
+      if(s.date!==lastDay){
+        html += '<div class="day-head">'+fmtDate(s.date)+'</div>';
+        lastDay=s.date;
+      }
+      var meta = fmtTime(s.time);
+      if(s.topic) meta += (meta?' · ':'')+s.topic;
+      html += '<div class="item'+(s.done?' done':'')+'">'
+        + '<div class="check" onclick="toggle(\''+s.id+'\')">'+(s.done?'✓':'')+'</div>'
+        + '<div class="info"><div class="name">'+esc(s.name)+'</div>'
+        + (meta?'<div class="meta">'+esc(meta)+'</div>':'')+'</div>'
+        + '<button class="del" onclick="del(\''+s.id+'\')">✕</button>'
+        + '</div>';
+    });
+    list.innerHTML = html;
+  }
+  function esc(s){return (s||'').replace(/[&<>]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
+
+  document.getElementById('addBtn').disabled = true;
+  render();
+</script>
+</body>
+</html>
